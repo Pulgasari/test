@@ -1,34 +1,34 @@
 <!DOCTYPE html>
 <html lang="de">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Performance & Module Analyzer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-
 <body class="bg-slate-900 text-slate-100 min-h-screen p-6">
   <div class="max-w-5xl mx-auto space-y-6">
-    
     <header class="border-b border-slate-800 pb-4">
-      <h1 class="text-3xl font-bold text-indigo-400">Website Performance & Module Analyzer</h1>
+      <h1 class="text-3xl font-bold text-indigo-400">Web Performance & Module Analyzer</h1>
       <p class="text-slate-400 text-sm mt-1">Client-side performance & resource timing analyzer powered by Lighthouse API</p>
     </header>
 
-    <!-- URL Input -->
-    <div class="flex gap-3">
-      <input id="urlInput" type="url" placeholder="https://example.com" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
-      <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition">Analyse starten</button>
+    <div class="space-y-3">
+      <input id="apiKeyInput" type="text" placeholder="Google PageSpeed API Key (optional)" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+      
+      <div class="flex gap-3">
+        <input id="urlInput" type="url" list="urlHistoryList" placeholder="https://example.com" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+        <datalist id="urlHistoryList"></datalist>
+
+        <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition">Analyse starten</button>
+      </div>
     </div>
 
-    <!-- Loading Indicator -->
     <div id="loading" class="hidden text-center py-12 text-slate-400">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent mb-3"></div>
       <p>Analyse läuft... Das kann bis zu 30 Sekunden dauern.</p>
     </div>
 
-    <!-- Analysis Results -->
     <div id="results" class="hidden space-y-6">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="vitalsGrid"></div>
 
@@ -38,7 +38,7 @@
           <table class="w-full text-left text-sm">
             <thead class="text-slate-400 border-b border-slate-700">
               <tr>
-                <th class="pb-2">Ressource / Modul</th>
+                <th class="pb-2">Ressource / Pfad</th>
                 <th class="pb-2">Typ</th>
                 <th class="pb-2">Größe</th>
                 <th class="pb-2">Dauer</th>
@@ -52,12 +52,62 @@
   </div>
 
   <script>
-    const API_KEY = 'AIzaSyCA6f2h1M-CN2-voPDEyikckgvGxzuRhG4';
+    // Constants for localStorage keys
+    const API_KEY_STORAGE     = 'psi_api_key';
+    const URL_HISTORY_STORAGE = 'psi_url_history';
+    const HARDCODED_API_KEY   = 'AIzaSyCA6f2h1M-CN2-voPDEyikckgvGxzuRhG4';
+
+    // Load saved settings and populate datalist on DOM ready
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem(API_KEY_STORAGE);
+      if (savedKey) {
+        document.getElementById('apiKeyInput').value = savedKey;
+      }
+      
+      refreshUrlHistory();
+    });
+
+    // Populate datalist and auto-fill last searched URL
+    function refreshUrlHistory() {
+      const history = JSON.parse(localStorage.getItem(URL_HISTORY_STORAGE) || '[]');
+      const datalist = document.getElementById('urlHistoryList');
+      const urlInput = document.getElementById('urlInput');
+
+      datalist.innerHTML = '';
+      history.forEach(url => {
+        const option = document.createElement('option');
+        option.value = url;
+        datalist.appendChild(option);
+      });
+
+      // Automatically fill the most recently used URL if input is empty
+      if (history.length > 0 && !urlInput.value) {
+        urlInput.value = history[0];
+      }
+    }
+
+    // Save analyzed URL to history array in localStorage
+    function saveUrlToHistory(url) {
+      let history = JSON.parse(localStorage.getItem(URL_HISTORY_STORAGE) || '[]');
+      
+      // Deduplicate and place latest URL at top
+      history = history.filter(item => item !== url);
+      history.unshift(url);
+
+      // Keep only last 15 entries
+      if (history.length > 15) {
+        history.pop();
+      }
+
+      localStorage.setItem(URL_HISTORY_STORAGE, JSON.stringify(history));
+      refreshUrlHistory();
+    }
 
     async function analyzeUrl() {
-      const urlInput   = document.getElementById('urlInput').value.trim();
-      const loading    = document.getElementById('loading');
-      const results    = document.getElementById('results');
+      const urlInput = document.getElementById('urlInput').value.trim();
+      const apiKey = document.getElementById('apiKeyInput').value.trim() || HARDCODED_API_KEY;
+      const loading = document.getElementById('loading');
+      const results = document.getElementById('results');
       const analyzeBtn = document.getElementById('analyzeBtn');
 
       if (!urlInput) {
@@ -65,16 +115,28 @@
         return;
       }
 
+      // Store current key and URL in localStorage
+      if (apiKey) {
+        localStorage.setItem(API_KEY_STORAGE, apiKey);
+      }
+      saveUrlToHistory(urlInput);
+
       loading.classList.remove('hidden');
       results.classList.add('hidden');
       analyzeBtn.disabled = true;
 
       try {
-        const apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE&key=${API_KEY}`;
-        const response    = await fetch(apiEndpoint);
-        const data        = await response.json();
+        let apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE`;
+        if (apiKey) {
+          apiEndpoint += `&key=${encodeURIComponent(apiKey)}`;
+        }
 
-        if (data.error) throw new Error(data.error.message);
+        const response = await fetch(apiEndpoint);
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
 
         const audits = data.lighthouseResult.audits;
         renderVitals(audits);
@@ -94,10 +156,10 @@
       vitalsGrid.innerHTML = '';
 
       const keyMetrics = [
-        { label: 'FCP', id: 'first-contentful-paint'   },
-        { label: 'LCP', id: 'largest-contentful-paint' },
-        { label: 'TBT', id: 'total-blocking-time'      },
-        { label: 'CLS', id: 'cumulative-layout-shift'  },
+        { id: 'first-contentful-paint', label: 'FCP' },
+        { id: 'largest-contentful-paint', label: 'LCP' },
+        { id: 'total-blocking-time', label: 'TBT' },
+        { id: 'cumulative-layout-shift', label: 'CLS' }
       ];
 
       keyMetrics.forEach(metric => {
@@ -115,6 +177,19 @@
       });
     }
 
+    function getResourceDuration(item) {
+      if (typeof item.duration === 'number') {
+        return Math.round(item.duration);
+      }
+      const start = item.startTime ?? item.networkRequestTime ?? item.rendererStartTime;
+      const end = item.endTime ?? item.finishedTime ?? item.networkEndTime;
+      
+      if (typeof start === 'number' && typeof end === 'number') {
+        return Math.max(0, Math.round(end - start));
+      }
+      return 0;
+    }
+
     function renderResources(networkAudit) {
       const tbody = document.getElementById('resourceTable');
       tbody.innerHTML = '';
@@ -125,16 +200,30 @@
       }
 
       const items = networkAudit.details.items;
-      items.sort((a, b) => (b.endTime - b.startTime) - (a.endTime - a.startTime));
+      items.sort((a, b) => getResourceDuration(b) - getResourceDuration(a));
 
       items.forEach(item => {
-        const row        = document.createElement('tr');
-        const fileName   = item.url.split('/').pop().split('?')[0] || item.url;
-        const sizeKb     = (item.transferSize / 1024).toFixed(1);
-        const durationMs = Math.round(item.endTime - item.startTime);
+        const row = document.createElement('tr');
+        
+        let fileName = 'Unbekannt';
+        let parentPath = '';
+        try {
+          const parsed = new URL(item.url);
+          const pathSegments = parsed.pathname.split('/').filter(Boolean);
+          fileName = pathSegments.pop() || parsed.hostname;
+          parentPath = parsed.hostname + (pathSegments.length > 0 ? '/' + pathSegments.join('/') + '/' : '/');
+        } catch (e) {
+          fileName = item.url;
+        }
+
+        const sizeKb = item.transferSize ? (item.transferSize / 1024).toFixed(1) : '0.0';
+        const durationMs = getResourceDuration(item);
 
         row.innerHTML = `
-          <td class="py-3 font-mono text-xs text-indigo-300 truncate max-w-md" title="${item.url}">${fileName}</td>
+          <td class="py-3 max-w-md truncate" title="${item.url}">
+            <div class="text-[10px] text-slate-500 font-mono truncate">${parentPath}</div>
+            <div class="font-mono text-xs text-indigo-300 font-medium truncate">${fileName}</div>
+          </td>
           <td class="py-3 text-slate-400 text-xs">${item.resourceType || 'Sonstige'}</td>
           <td class="py-3 text-slate-300">${sizeKb} KB</td>
           <td class="py-3 text-slate-300 font-semibold">${durationMs} ms</td>
