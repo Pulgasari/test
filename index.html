@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Performance & Module Analyzer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6">
+  <div class="max-w-5xl mx-auto space-y-6">
+    <header class="border-b border-slate-800 pb-4">
+      <h1 class="text-3xl font-bold text-indigo-400">Web Performance & Module Analyzer</h1>
+      <p class="text-slate-400 text-sm mt-1">Client-side performance & resource timing analyzer powered by Lighthouse API</p>
+    </header>
+
+    <!-- Input Form -->
+    <div class="flex gap-3">
+      <input id="urlInput" type="url" placeholder="https://example.com" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+      <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition">Analyse starten</button>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading" class="hidden text-center py-12 text-slate-400">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent mb-3"></div>
+      <p>Analyse läuft... Das kann bis zu 30 Sekunden dauern.</p>
+    </div>
+
+    <!-- Analysis Results -->
+    <div id="results" class="hidden space-y-6">
+      <!-- Web Vitals Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="vitalsGrid"></div>
+
+      <!-- Resource & Module Resolution Timings -->
+      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+        <h2 class="text-xl font-semibold text-slate-200 mb-4">Modul- & Ressourcen-Ladezeiten</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="pb-2">Ressource / Modul</th>
+                <th class="pb-2">Typ</th>
+                <th class="pb-2">Größe</th>
+                <th class="pb-2">Dauer</th>
+              </tr>
+            </thead>
+            <tbody id="resourceTable" class="divide-y divide-slate-700/50"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Execute URL analysis via PageSpeed Insights API
+    async function analyzeUrl() {
+      const urlInput = document.getElementById('urlInput').value.trim();
+      const loading = document.getElementById('loading');
+      const results = document.getElementById('results');
+      const analyzeBtn = document.getElementById('analyzeBtn');
+
+      if (!urlInput) {
+        alert('Bitte eine gültige URL eingeben (inkl. https://)');
+        return;
+      }
+
+      loading.classList.remove('hidden');
+      results.classList.add('hidden');
+      analyzeBtn.disabled = true;
+
+      try {
+        // Query Google PageSpeed Insights REST API directly from browser
+        const apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE`;
+        const response = await fetch(apiEndpoint);
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
+
+        const audits = data.lighthouseResult.audits;
+        renderVitals(audits);
+        renderResources(audits['network-requests']);
+        
+        results.classList.remove('hidden');
+      } catch (err) {
+        alert('Analyse fehlgeschlagen: ' + err.message);
+      } finally {
+        loading.classList.add('hidden');
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    // Render Web Vitals metrics into visual cards
+    function renderVitals(audits) {
+      const vitalsGrid = document.getElementById('vitalsGrid');
+      vitalsGrid.innerHTML = '';
+
+      const keyMetrics = [
+        { id: 'first-contentful-paint', label: 'FCP' },
+        { id: 'largest-contentful-paint', label: 'LCP' },
+        { id: 'total-blocking-time', label: 'TBT' },
+        { id: 'cumulative-layout-shift', label: 'CLS' }
+      ];
+
+      keyMetrics.forEach(metric => {
+        const audit = audits[metric.id];
+        if (!audit) return;
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800 p-4 rounded-xl border border-slate-700';
+        card.innerHTML = `
+          <div class="text-xs text-slate-400 font-medium">${metric.label}</div>
+          <div class="text-2xl font-bold text-indigo-400 mt-1">${audit.displayValue || 'N/A'}</div>
+          <div class="text-xs text-slate-500 mt-1 truncate">${audit.title}</div>
+        `;
+        vitalsGrid.appendChild(card);
+      });
+    }
+
+    // Parse and populate individual script, module, and network asset timings
+    function renderResources(networkAudit) {
+      const tbody = document.getElementById('resourceTable');
+      tbody.innerHTML = '';
+
+      if (!networkAudit || !networkAudit.details || !networkAudit.details.items) {
+        tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-slate-500">Keine detaillierten Netzwerkdaten verfügbar</td></tr>';
+        return;
+      }
+
+      const items = networkAudit.details.items;
+      
+      // Sort network items by duration descending
+      items.sort((a, b) => (b.endTime - b.startTime) - (a.endTime - a.startTime));
+
+      items.forEach(item => {
+        const row = document.createElement('tr');
+        const fileName = item.url.split('/').pop().split('?')[0] || item.url;
+        const sizeKb = (item.transferSize / 1024).toFixed(1);
+        const durationMs = Math.round(item.endTime - item.startTime);
+
+        row.innerHTML = `
+          <td class="py-3 font-mono text-xs text-indigo-300 truncate max-w-md" title="${item.url}">${fileName}</td>
+          <td class="py-3 text-slate-400 text-xs">${item.resourceType || 'Sonstige'}</td>
+          <td class="py-3 text-slate-300">${sizeKb} KB</td>
+          <td class="py-3 text-slate-300 font-semibold">${durationMs} ms</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+  </script>
+</body>
+</html>
