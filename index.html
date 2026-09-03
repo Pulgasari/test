@@ -3,37 +3,94 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Web Performance & Module Analyzer</title>
-  <link rel='stylesheet' href='https://code.pulgasari.dev/aufbau/css/themes/zombie.css' />
-  <link rel='stylesheet' href='https://code.pulgasari.dev/aufbau/css/aufbau.css' />
+  <title>Web Performance Analyzer</title>
+  <link rel="stylesheet" href="https://code.pulgasari.dev/aufbau/css/themes/zombie.css" />
+  <link rel="stylesheet" href="https://code.pulgasari.dev/aufbau/css/aufbau.css" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen p-4">
+<body class="min-h-screen p-4 bg-slate-900 text-slate-100">
   <div class="max-w-5xl mx-auto space-y-6">
     <header class="border-b border-slate-800 pb-4">
       <h1 class="text-3xl font-bold text-indigo-400">Web Performance & Module Analyzer</h1>
       <p class="text-slate-400 text-sm mt-1">Client-side performance & resource timing analyzer powered by Lighthouse API</p>
     </header>
 
-    <div class="space-y-3">
-      <input id="apiKeyInput" type="text" placeholder="Google PageSpeed API Key (optional)" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
-      
+    <!-- URL Input & History -->
+    <div class="space-y-4 bg-slate-800/60 p-4 rounded-xl border border-slate-800">
       <div class="flex gap-3">
-        <input id="urlInput" type="url" list="urlHistoryList" placeholder="https://example.com" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
-        <datalist id="urlHistoryList"></datalist>
+        <div class="relative flex-1">
+          <input 
+            id="urlInput" 
+            type="text" 
+            list="urlHistoryList" 
+            autocomplete="off" 
+            placeholder="example.com oder https://example.com" 
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+          >
+          <datalist id="urlHistoryList"></datalist>
+        </div>
+        <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition shrink-0">Analyse starten</button>
+      </div>
 
-        <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition">Analyse starten</button>
+      <!-- API Configuration Options -->
+      <div class="flex flex-wrap items-center gap-6 text-sm text-slate-300 pt-2 border-t border-slate-700/50">
+        <div class="flex items-center gap-2">
+          <label for="strategySelect" class="font-medium text-slate-400">Gerät:</label>
+          <select id="strategySelect" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white focus:outline-none focus:border-indigo-500">
+            <option value="mobile" selected>Mobile</option>
+            <option value="desktop">Desktop</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-4 flex-wrap">
+          <span class="font-medium text-slate-400">Kategorien:</span>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" value="PERFORMANCE" checked class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> Performance
+          </label>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" value="ACCESSIBILITY" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> Accessibility
+          </label>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" value="BEST_PRACTICES" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> Best Practices
+          </label>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" value="SEO" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> SEO
+          </label>
+        </div>
       </div>
     </div>
 
+    <!-- Saved Reports Section -->
+    <div id="savedReportsSection" class="hidden bg-slate-800/40 rounded-xl p-4 border border-slate-800 space-y-3">
+      <h2 class="text-md font-semibold text-slate-300">Gespeicherte Analysen</h2>
+      <div id="savedReportsList" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- Loading Indicator -->
     <div id="loading" class="hidden text-center py-12 text-slate-400">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent mb-3"></div>
       <p>Analyse läuft... Das kann bis zu 30 Sekunden dauern.</p>
     </div>
 
+    <!-- Analysis Results -->
     <div id="results" class="hidden space-y-6">
+      <div class="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
+        <div>
+          <h2 id="resultTitle" class="text-lg font-bold text-indigo-300"></h2>
+          <p id="resultMeta" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+        <button onclick="saveCurrentTest()" id="saveTestBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-1.5 rounded-lg text-sm transition">
+          Test speichern
+        </button>
+      </div>
+
+      <!-- Lighthouse Category Scores -->
+      <div id="categoryScoresGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden"></div>
+
+      <!-- Web Vitals Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="vitalsGrid"></div>
 
+      <!-- Resource Timings -->
       <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
         <h2 class="text-xl font-semibold text-slate-200 mb-4">Modul- & Ressourcen-Ladezeiten</h2>
         <div class="overflow-x-auto">
@@ -54,22 +111,28 @@
   </div>
 
   <script>
-    // Constants for localStorage keys
-    const API_KEY_STORAGE     = 'psi_api_key';
+    const HARDCODED_API_KEY = 'AIzaSyCA6f2h1M-CN2-voPDEyikckgvGxzuRhG4';
     const URL_HISTORY_STORAGE = 'psi_url_history';
-    const HARDCODED_API_KEY   = 'AIzaSyCA6f2h1M-CN2-voPDEyikckgvGxzuRhG4';
+    const SAVED_REPORTS_STORAGE = 'psi_saved_reports';
 
-    // Load saved settings and populate datalist on DOM ready
+    let activeReportData = null;
+
     document.addEventListener('DOMContentLoaded', () => {
-      const savedKey = localStorage.getItem(API_KEY_STORAGE);
-      if (savedKey) {
-        document.getElementById('apiKeyInput').value = savedKey;
-      }
-      
       refreshUrlHistory();
+      renderSavedReportsList();
     });
 
-    // Populate datalist and auto-fill last searched URL
+    // Normalize URL input to ensure http/https prefix
+    function normalizeUrl(rawUrl) {
+      let url = rawUrl.trim();
+      if (!url) return '';
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+      return url;
+    }
+
+    // Refresh HTML datalist with stored entries
     function refreshUrlHistory() {
       const history = JSON.parse(localStorage.getItem(URL_HISTORY_STORAGE) || '[]');
       const datalist = document.getElementById('urlHistoryList');
@@ -82,56 +145,56 @@
         datalist.appendChild(option);
       });
 
-      // Automatically fill the most recently used URL if input is empty
       if (history.length > 0 && !urlInput.value) {
         urlInput.value = history[0];
       }
     }
 
-    // Save analyzed URL to history array in localStorage
+    // Save queried URL to local storage history
     function saveUrlToHistory(url) {
       let history = JSON.parse(localStorage.getItem(URL_HISTORY_STORAGE) || '[]');
-      
-      // Deduplicate and place latest URL at top
       history = history.filter(item => item !== url);
       history.unshift(url);
-
-      // Keep only last 15 entries
-      if (history.length > 15) {
-        history.pop();
-      }
-
+      if (history.length > 15) history.pop();
       localStorage.setItem(URL_HISTORY_STORAGE, JSON.stringify(history));
       refreshUrlHistory();
     }
 
     async function analyzeUrl() {
-      const urlInput = document.getElementById('urlInput').value.trim();
-      const apiKey = document.getElementById('apiKeyInput').value.trim() || HARDCODED_API_KEY;
-      const loading = document.getElementById('loading');
-      const results = document.getElementById('results');
-      const analyzeBtn = document.getElementById('analyzeBtn');
+      const rawUrlInput = document.getElementById('urlInput').value;
+      const normalizedUrl = normalizeUrl(rawUrlInput);
 
-      if (!urlInput) {
-        alert('Bitte eine gültige URL eingeben (inkl. https://)');
+      if (!normalizedUrl) {
+        alert('Bitte eine URL eingeben');
         return;
       }
 
-      // Store current key and URL in localStorage
-      if (apiKey) {
-        localStorage.setItem(API_KEY_STORAGE, apiKey);
+      // Update input field with normalized URL
+      document.getElementById('urlInput').value = normalizedUrl;
+      saveUrlToHistory(normalizedUrl);
+
+      const strategy = document.getElementById('strategySelect').value;
+      const categoryCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+      const categories = Array.from(categoryCheckboxes).map(cb => cb.value);
+
+      if (categories.length === 0) {
+        alert('Bitte wähle mindestens eine Kategorie aus.');
+        return;
       }
-      saveUrlToHistory(urlInput);
+
+      const loading = document.getElementById('loading');
+      const results = document.getElementById('results');
+      const analyzeBtn = document.getElementById('analyzeBtn');
 
       loading.classList.remove('hidden');
       results.classList.add('hidden');
       analyzeBtn.disabled = true;
 
       try {
-        let apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE`;
-        if (apiKey) {
-          apiEndpoint += `&key=${encodeURIComponent(apiKey)}`;
-        }
+        let apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(normalizedUrl)}&key=${HARDCODED_API_KEY}&strategy=${strategy}`;
+        categories.forEach(cat => {
+          apiEndpoint += `&category=${cat}`;
+        });
 
         const response = await fetch(apiEndpoint);
         const data = await response.json();
@@ -140,11 +203,15 @@
           throw new Error(data.error.message);
         }
 
-        const audits = data.lighthouseResult.audits;
-        renderVitals(audits);
-        renderResources(audits['network-requests']);
-        
-        results.classList.remove('hidden');
+        activeReportData = {
+          id: Date.now().toString(),
+          url: normalizedUrl,
+          timestamp: new Date().toLocaleString('de-DE'),
+          strategy: strategy,
+          lighthouseResult: data.lighthouseResult
+        };
+
+        displayReport(activeReportData);
       } catch (err) {
         alert('Analyse fehlgeschlagen: ' + err.message);
       } finally {
@@ -153,6 +220,57 @@
       }
     }
 
+    // Display loaded or freshly fetched report data
+    function displayReport(report) {
+      const results = document.getElementById('results');
+      document.getElementById('resultTitle').textContent = report.url;
+      document.getElementById('resultMeta').textContent = `Strategie: ${report.strategy.toUpperCase()} \vert{} Erstellt:${report.timestamp}`;
+
+      const lighthouse = report.lighthouseResult;
+      renderCategoryScores(lighthouse.categories);
+      renderVitals(lighthouse.audits);
+      renderResources(lighthouse.audits['network-requests']);
+
+      results.classList.remove('hidden');
+    }
+
+    // Render category score badges if available
+    function renderCategoryScores(categories) {
+      const grid = document.getElementById('categoryScoresGrid');
+      grid.innerHTML = '';
+
+      if (!categories) {
+        grid.classList.add('hidden');
+        return;
+      }
+
+      const keys = Object.keys(categories);
+      if (keys.length === 0) {
+        grid.classList.add('hidden');
+        return;
+      }
+
+      keys.forEach(key => {
+        const cat = categories[key];
+        const score = Math.round((cat.score || 0) * 100);
+        
+        let scoreColor = 'text-red-400';
+        if (score >= 90) scoreColor = 'text-emerald-400';
+        else if (score >= 50) scoreColor = 'text-amber-400';
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800 p-4 rounded-xl border border-slate-700 text-center';
+        card.innerHTML = `
+          <div class="text-xs text-slate-400 font-medium">${cat.title}</div>
+          <div class="text-3xl font-bold ${scoreColor} mt-1">${score}</div>
+        `;
+        grid.appendChild(card);
+      });
+
+      grid.classList.remove('hidden');
+    }
+
+    // Render Web Vitals metrics into visual cards
     function renderVitals(audits) {
       const vitalsGrid = document.getElementById('vitalsGrid');
       vitalsGrid.innerHTML = '';
@@ -179,6 +297,7 @@
       });
     }
 
+    // Helper to calculate request duration across schema versions
     function getResourceDuration(item) {
       if (typeof item.duration === 'number') {
         return Math.round(item.duration);
@@ -192,6 +311,7 @@
       return 0;
     }
 
+    // Populate network resource table
     function renderResources(networkAudit) {
       const tbody = document.getElementById('resourceTable');
       tbody.innerHTML = '';
@@ -232,6 +352,67 @@
         `;
         tbody.appendChild(row);
       });
+    }
+
+    // Save active test report locally
+    function saveCurrentTest() {
+      if (!activeReportData) return;
+      let saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
+      
+      // Avoid duplicate saves of identical report ID
+      saved = saved.filter(item => item.id !== activeReportData.id);
+      saved.unshift(activeReportData);
+
+      localStorage.setItem(SAVED_REPORTS_STORAGE, JSON.stringify(saved));
+      renderSavedReportsList();
+      alert('Test erfolgreich gespeichert!');
+    }
+
+    // Render interactive list of saved reports
+    function renderSavedReportsList() {
+      const saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
+      const container = document.getElementById('savedReportsSection');
+      const list = document.getElementById('savedReportsList');
+
+      if (saved.length === 0) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      list.innerHTML = '';
+      saved.forEach(report => {
+        const badge = document.createElement('div');
+        badge.className = 'flex items-center gap-2 bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-700';
+        badge.innerHTML = `
+          <button onclick="loadSavedReport('${report.id}')" class="text-indigo-300 hover:text-indigo-200 font-medium truncate max-w-[200px]" title="${report.url}">
+            ${report.url.replace(/^https?:\/\//, '')} (${report.strategy})
+          </button>
+          <button onclick="deleteSavedReport('${report.id}')" class="text-slate-500 hover:text-red-400 font-bold ml-1">
+            ✕
+          </button>
+        `;
+        list.appendChild(badge);
+      });
+
+      container.classList.remove('hidden');
+    }
+
+    // Load saved report into UI
+    function loadSavedReport(id) {
+      const saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
+      const report = saved.find(item => item.id === id);
+      if (report) {
+        activeReportData = report;
+        displayReport(report);
+      }
+    }
+
+    // Delete saved report entry
+    function deleteSavedReport(id) {
+      let saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
+      saved = saved.filter(item => item.id !== id);
+      localStorage.setItem(SAVED_REPORTS_STORAGE, JSON.stringify(saved));
+      renderSavedReportsList();
     }
   </script>
 </body>
