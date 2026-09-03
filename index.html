@@ -52,13 +52,12 @@
   </div>
 
   <script>
-    // Hardcoded API key restricted via Google Cloud Console HTTP referrers
-    const API_KEY = 'DEIN_API_KEY_HIER';
+    const API_KEY = 'AIzaSyCA6f2h1M-CN2-voPDEyikckgvGxzuRhG4';
 
     async function analyzeUrl() {
-      const urlInput = document.getElementById('urlInput').value.trim();
-      const loading = document.getElementById('loading');
-      const results = document.getElementById('results');
+      const urlInput   = document.getElementById('urlInput').value.trim();
+      const loading    = document.getElementById('loading');
+      const results    = document.getElementById('results');
       const analyzeBtn = document.getElementById('analyzeBtn');
 
       if (!urlInput) {
@@ -72,13 +71,10 @@
 
       try {
         const apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE&key=${API_KEY}`;
+        const response    = await fetch(apiEndpoint);
+        const data        = await response.json();
 
-        const response = await fetch(apiEndpoint);
-        const data = await response.json();
-
-        if (data.error) {
-          throw new Error(data.error.message);
-        }
+        if (data.error) throw new Error(data.error.message);
 
         const audits = data.lighthouseResult.audits;
         renderVitals(audits);
@@ -98,10 +94,10 @@
       vitalsGrid.innerHTML = '';
 
       const keyMetrics = [
-        { id: 'first-contentful-paint', label: 'FCP' },
-        { id: 'largest-contentful-paint', label: 'LCP' },
-        { id: 'total-blocking-time', label: 'TBT' },
-        { id: 'cumulative-layout-shift', label: 'CLS' }
+        { label: 'FCP', id: 'first-contentful-paint'   },
+        { label: 'LCP', id: 'largest-contentful-paint' },
+        { label: 'TBT', id: 'total-blocking-time'      },
+        { label: 'CLS', id: 'cumulative-layout-shift'  },
       ];
 
       keyMetrics.forEach(metric => {
@@ -132,9 +128,9 @@
       items.sort((a, b) => (b.endTime - b.startTime) - (a.endTime - a.startTime));
 
       items.forEach(item => {
-        const row = document.createElement('tr');
-        const fileName = item.url.split('/').pop().split('?')[0] || item.url;
-        const sizeKb = (item.transferSize / 1024).toFixed(1);
+        const row        = document.createElement('tr');
+        const fileName   = item.url.split('/').pop().split('?')[0] || item.url;
+        const sizeKb     = (item.transferSize / 1024).toFixed(1);
         const durationMs = Math.round(item.endTime - item.startTime);
 
         row.innerHTML = `
