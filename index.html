@@ -1,19 +1,22 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Performance & Module Analyzer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="bg-slate-900 text-slate-100 min-h-screen p-6">
   <div class="max-w-5xl mx-auto space-y-6">
+    
     <header class="border-b border-slate-800 pb-4">
       <h1 class="text-3xl font-bold text-indigo-400">Web Performance & Module Analyzer</h1>
       <p class="text-slate-400 text-sm mt-1">Client-side performance & resource timing analyzer powered by Lighthouse API</p>
     </header>
 
-    <!-- Input Form -->
+    <!-- URL Input -->
     <div class="flex gap-3">
       <input id="urlInput" type="url" placeholder="https://example.com" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
       <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition">Analyse starten</button>
@@ -27,10 +30,8 @@
 
     <!-- Analysis Results -->
     <div id="results" class="hidden space-y-6">
-      <!-- Web Vitals Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="vitalsGrid"></div>
 
-      <!-- Resource & Module Resolution Timings -->
       <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
         <h2 class="text-xl font-semibold text-slate-200 mb-4">Modul- & Ressourcen-Ladezeiten</h2>
         <div class="overflow-x-auto">
@@ -51,7 +52,9 @@
   </div>
 
   <script>
-    // Execute URL analysis via PageSpeed Insights API
+    // Hardcoded API key restricted via Google Cloud Console HTTP referrers
+    const API_KEY = 'DEIN_API_KEY_HIER';
+
     async function analyzeUrl() {
       const urlInput = document.getElementById('urlInput').value.trim();
       const loading = document.getElementById('loading');
@@ -68,8 +71,8 @@
       analyzeBtn.disabled = true;
 
       try {
-        // Query Google PageSpeed Insights REST API directly from browser
-        const apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE`;
+        const apiEndpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlInput)}&category=PERFORMANCE&key=${API_KEY}`;
+
         const response = await fetch(apiEndpoint);
         const data = await response.json();
 
@@ -90,7 +93,6 @@
       }
     }
 
-    // Render Web Vitals metrics into visual cards
     function renderVitals(audits) {
       const vitalsGrid = document.getElementById('vitalsGrid');
       vitalsGrid.innerHTML = '';
@@ -117,7 +119,6 @@
       });
     }
 
-    // Parse and populate individual script, module, and network asset timings
     function renderResources(networkAudit) {
       const tbody = document.getElementById('resourceTable');
       tbody.innerHTML = '';
@@ -128,8 +129,6 @@
       }
 
       const items = networkAudit.details.items;
-      
-      // Sort network items by duration descending
       items.sort((a, b) => (b.endTime - b.startTime) - (a.endTime - a.startTime));
 
       items.forEach(item => {
