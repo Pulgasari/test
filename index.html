@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,35 +7,57 @@
   <link rel="stylesheet" href="https://code.pulgasari.dev/aufbau/css/themes/zombie.css" />
   <link rel="stylesheet" href="https://code.pulgasari.dev/aufbau/css/aufbau.css" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- chartist: lightweight, pure-svg charting lib for the resource visualizations -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chartist@0.11.4/dist/chartist.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chartist@0.11.4/dist/chartist.min.js"></script>
+  <style>
+    /* dark-theme overrides for chartist's default (light) styling */
+    .ct-label { fill: #94a3b8; color: #94a3b8; font-size: 11px; }
+    .ct-grid { stroke: rgba(148, 163, 184, 0.15); stroke-dasharray: 2px; }
+    .ct-chart-donut .ct-slice-donut { stroke-width: 26px; }
+    .ct-chart-bar .ct-bar { stroke: #818cf8; stroke-width: 22px; }
+    /* per-type donut colors, keyed by the slugged resource type */
+    .ct-c-script      .ct-slice-donut { stroke: #818cf8; }
+    .ct-c-stylesheet  .ct-slice-donut { stroke: #38bdf8; }
+    .ct-c-image       .ct-slice-donut { stroke: #34d399; }
+    .ct-c-font        .ct-slice-donut { stroke: #fbbf24; }
+    .ct-c-document    .ct-slice-donut { stroke: #fb7185; }
+    .ct-c-media       .ct-slice-donut { stroke: #a78bfa; }
+    .ct-c-fetchxhr    .ct-slice-donut { stroke: #22d3ee; }
+    .ct-c-other       .ct-slice-donut { stroke: #94a3b8; }
+    /* sortable header affordance */
+    th[data-sort] { cursor: pointer; user-select: none; }
+    th[data-sort]:hover { color: #a5b4fc; }
+  </style>
 </head>
 <body class="min-h-screen p-4 bg-slate-900 text-slate-100">
   <div class="max-w-5xl mx-auto space-y-6">
     <header class="border-b border-slate-800 pb-4">
       <h1 class="text-3xl font-bold text-indigo-400">Web Performance Analyzer</h1>
-      <p class="text-slate-400 text-sm mt-1">Client-side performance & resource timing analyzer powered by Lighthouse API</p>
+      <p class="text-slate-400 text-sm mt-1">Client-side performance &amp; resource-timing analyzer powered by the Lighthouse / PageSpeed Insights API</p>
     </header>
 
-    <!-- URL Input & History -->
+    <!-- url input & history -->
     <div class="space-y-4 bg-slate-800/60 p-4 rounded-xl border border-slate-800">
       <div class="flex gap-3">
         <div class="relative flex-1">
-          <input 
-            id="urlInput" 
-            type="text" 
-            list="urlHistoryList" 
-            autocomplete="off" 
-            placeholder="example.com oder https://example.com" 
+          <input
+            id="urlInput"
+            type="text"
+            list="urlHistoryList"
+            autocomplete="off"
+            placeholder="example.com or https://example.com"
             class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
           >
           <datalist id="urlHistoryList"></datalist>
         </div>
-        <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition shrink-0">Analyse starten</button>
+        <button onclick="analyzeUrl()" id="analyzeBtn" class="bg-indigo-600 hover:bg-indigo-500 font-medium px-6 py-2 rounded-lg transition shrink-0">Analyze</button>
       </div>
 
-      <!-- API Configuration Options -->
+      <!-- api configuration options -->
       <div class="flex flex-wrap items-center gap-6 text-sm text-slate-300 pt-2 border-t border-slate-700/50">
         <div class="flex items-center gap-2">
-          <label for="strategySelect" class="font-medium text-slate-400">Gerät:</label>
+          <label for="strategySelect" class="font-medium text-slate-400">Device:</label>
           <select id="strategySelect" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white focus:outline-none focus:border-indigo-500">
             <option value="mobile" selected>Mobile</option>
             <option value="desktop">Desktop</option>
@@ -43,7 +65,7 @@
         </div>
 
         <div class="flex items-center gap-4 flex-wrap">
-          <span class="font-medium text-slate-400">Kategorien:</span>
+          <span class="font-medium text-slate-400">Categories:</span>
           <label class="inline-flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" value="PERFORMANCE" checked class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> Performance
           </label>
@@ -60,47 +82,87 @@
       </div>
     </div>
 
-    <!-- Saved Reports Section -->
+    <!-- saved reports section -->
     <div id="savedReportsSection" class="hidden bg-slate-800/40 rounded-xl p-4 border border-slate-800 space-y-3">
-      <h2 class="text-md font-semibold text-slate-300">Gespeicherte Analysen</h2>
+      <h2 class="text-md font-semibold text-slate-300">Saved analyses</h2>
       <div id="savedReportsList" class="flex flex-wrap gap-2"></div>
     </div>
 
-    <!-- Loading Indicator -->
+    <!-- loading indicator -->
     <div id="loading" class="hidden text-center py-12 text-slate-400">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent mb-3"></div>
-      <p>Analyse läuft... Das kann bis zu 30 Sekunden dauern.</p>
+      <p>Analysis running... this can take up to 30 seconds.</p>
     </div>
 
-    <!-- Analysis Results -->
+    <!-- analysis results -->
     <div id="results" class="hidden space-y-6">
-      <div class="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
-        <div>
-          <h2 id="resultTitle" class="text-lg font-bold text-indigo-300"></h2>
+      <div class="flex justify-between items-center gap-3 bg-slate-800 p-4 rounded-xl border border-slate-700">
+        <div class="min-w-0">
+          <h2 id="resultTitle" class="text-lg font-bold text-indigo-300 truncate"></h2>
           <p id="resultMeta" class="text-xs text-slate-400 mt-0.5"></p>
         </div>
-        <button onclick="saveCurrentTest()" id="saveTestBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-1.5 rounded-lg text-sm transition">
-          Test speichern
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="exportCurrentReport()" id="exportBtn" class="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-1.5 rounded-lg text-sm transition">
+            Export JSON
+          </button>
+          <button onclick="saveCurrentTest()" id="saveTestBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-1.5 rounded-lg text-sm transition">
+            Save report
+          </button>
+        </div>
       </div>
 
-      <!-- Lighthouse Category Scores -->
+      <!-- lighthouse category scores -->
       <div id="categoryScoresGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden"></div>
 
-      <!-- Web Vitals Cards -->
+      <!-- web vitals cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="vitalsGrid"></div>
 
-      <!-- Resource Timings -->
+      <!-- resource stats panel: total + per-type counts, click to filter -->
+      <div id="statsPanel" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3"></div>
+
+      <!-- svg visualizations -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">Transfer size by type</h3>
+          <div id="sizeDonut" class="ct-chart ct-chart-donut" style="height: 220px;"></div>
+          <div id="donutLegend" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-slate-400"></div>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">Request count by type</h3>
+          <div id="countBar" class="ct-chart ct-chart-bar" style="height: 220px;"></div>
+        </div>
+      </div>
+
+      <!-- resource timings -->
       <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <h2 class="text-xl font-semibold text-slate-200 mb-4">Modul- & Ressourcen-Ladezeiten</h2>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 class="text-xl font-semibold text-slate-200">Module &amp; resource load times</h2>
+          <span id="resultCount" class="text-xs text-slate-500"></span>
+        </div>
+
+        <!-- filter / sort toolbar -->
+        <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
+          <input
+            id="resourceSearch"
+            type="text"
+            placeholder="Filter by file name or path..."
+            class="flex-1 min-w-[200px] bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-indigo-500"
+          >
+          <select id="typeFilter" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-indigo-500">
+            <option value="">All types</option>
+          </select>
+          <button onclick="resetResourceFilters()" class="text-slate-400 hover:text-indigo-300 px-2 py-1.5">Reset</button>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="text-slate-400 border-b border-slate-700">
               <tr>
-                <th class="pb-2">Ressource / Pfad</th>
-                <th class="pb-2">Typ</th>
-                <th class="pb-2">Größe</th>
-                <th class="pb-2">Dauer</th>
+                <th class="pb-2" data-sort="name">Resource / Path <span class="sort-ind text-slate-600"></span></th>
+                <th class="pb-2" data-sort="type">Type <span class="sort-ind text-slate-600"></span></th>
+                <th class="pb-2" data-sort="size">Size <span class="sort-ind text-slate-600"></span></th>
+                <th class="pb-2" data-sort="dur">Duration <span class="sort-ind text-slate-600"></span></th>
+                <th class="pb-2 text-right">Open</th>
               </tr>
             </thead>
             <tbody id="resourceTable" class="divide-y divide-slate-700/50"></tbody>
@@ -110,19 +172,87 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    // filterElements/sortElements come from domina (first-party, served alongside this page)
+    import { filterElements, sortElements } from 'https://code.pulgasari.dev/domina/core/index.js';
+
     const HARDCODED_API_KEY = 'AIzaSyCA6f2h1M-CN2-voPDEyikckgvGxzuRhG4';
     const URL_HISTORY_STORAGE = 'psi_url_history';
     const SAVED_REPORTS_STORAGE = 'psi_saved_reports';
 
     let activeReportData = null;
 
+    // live filter/sort state for the resource table
+    const sortState = { key: 'dur', dir: 'desc' };
+
+    // canonical resource type -> accent color, used by legend and stat cards
+    const TYPE_COLORS = {
+      'Script': '#818cf8',
+      'Stylesheet': '#38bdf8',
+      'Image': '#34d399',
+      'Font': '#fbbf24',
+      'Document': '#fb7185',
+      'Media': '#a78bfa',
+      'Fetch/XHR': '#22d3ee',
+      'Other': '#94a3b8',
+    };
+
+    // collapse lighthouse resource types into a small canonical set
+    function normalizeType(raw) {
+      const map = {
+        Script: 'Script',
+        Stylesheet: 'Stylesheet',
+        Image: 'Image',
+        Font: 'Font',
+        Document: 'Document',
+        Media: 'Media',
+        XHR: 'Fetch/XHR',
+        Fetch: 'Fetch/XHR',
+      };
+      return map[raw] || 'Other';
+    }
+
+    // slug used both as chartist series className and legend hooks
+    function typeSlug(type) {
+      return 'ct-c-' + type.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       refreshUrlHistory();
       renderSavedReportsList();
+
+      // enter key in the url field triggers analysis
+      document.getElementById('urlInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') analyzeUrl();
+      });
+
+      // live table filtering
+      document.getElementById('resourceSearch').addEventListener('input', applyResourceFilter);
+      document.getElementById('typeFilter').addEventListener('change', applyResourceFilter);
+
+      // sortable headers
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+          const key = th.dataset.sort;
+          if (sortState.key === key) {
+            sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortState.key = key;
+            sortState.dir = key === 'name' || key === 'type' ? 'asc' : 'desc';
+          }
+          applyResourceSort();
+        });
+      });
     });
 
-    // Normalize URL input to ensure http/https prefix
+    // normalize url input to ensure http/https prefix
     function normalizeUrl(rawUrl) {
       let url = rawUrl.trim();
       if (!url) return '';
@@ -132,7 +262,7 @@
       return url;
     }
 
-    // Refresh HTML datalist with stored entries
+    // refresh html datalist with stored entries
     function refreshUrlHistory() {
       const history = JSON.parse(localStorage.getItem(URL_HISTORY_STORAGE) || '[]');
       const datalist = document.getElementById('urlHistoryList');
@@ -150,7 +280,7 @@
       }
     }
 
-    // Save queried URL to local storage history
+    // save queried url to local storage history
     function saveUrlToHistory(url) {
       let history = JSON.parse(localStorage.getItem(URL_HISTORY_STORAGE) || '[]');
       history = history.filter(item => item !== url);
@@ -165,11 +295,11 @@
       const normalizedUrl = normalizeUrl(rawUrlInput);
 
       if (!normalizedUrl) {
-        alert('Bitte eine URL eingeben');
+        alert('Please enter a URL');
         return;
       }
 
-      // Update input field with normalized URL
+      // update input field with normalized url
       document.getElementById('urlInput').value = normalizedUrl;
       saveUrlToHistory(normalizedUrl);
 
@@ -178,7 +308,7 @@
       const categories = Array.from(categoryCheckboxes).map(cb => cb.value);
 
       if (categories.length === 0) {
-        alert('Bitte wähle mindestens eine Kategorie aus.');
+        alert('Please select at least one category.');
         return;
       }
 
@@ -206,25 +336,26 @@
         activeReportData = {
           id: Date.now().toString(),
           url: normalizedUrl,
-          timestamp: new Date().toLocaleString('de-DE'),
+          timestamp: new Date().toLocaleString('en-US'),
           strategy: strategy,
           lighthouseResult: data.lighthouseResult
         };
 
         displayReport(activeReportData);
       } catch (err) {
-        alert('Analyse fehlgeschlagen: ' + err.message);
+        alert('Analysis failed: ' + err.message);
       } finally {
         loading.classList.add('hidden');
         analyzeBtn.disabled = false;
       }
     }
 
-    // Display loaded or freshly fetched report data
+    // display loaded or freshly fetched report data
     function displayReport(report) {
       const results = document.getElementById('results');
       document.getElementById('resultTitle').textContent = report.url;
-      document.getElementById('resultMeta').textContent = `Strategie: ${report.strategy.toUpperCase()} \vert{} Erstellt:${report.timestamp}`;
+      document.getElementById('resultMeta').textContent =
+        `Strategy: ${report.strategy.toUpperCase()} · Created: ${report.timestamp}`;
 
       const lighthouse = report.lighthouseResult;
       renderCategoryScores(lighthouse.categories);
@@ -234,7 +365,7 @@
       results.classList.remove('hidden');
     }
 
-    // Render category score badges if available
+    // render category score badges if available
     function renderCategoryScores(categories) {
       const grid = document.getElementById('categoryScoresGrid');
       grid.innerHTML = '';
@@ -253,7 +384,7 @@
       keys.forEach(key => {
         const cat = categories[key];
         const score = Math.round((cat.score || 0) * 100);
-        
+
         let scoreColor = 'text-red-400';
         if (score >= 90) scoreColor = 'text-emerald-400';
         else if (score >= 50) scoreColor = 'text-amber-400';
@@ -270,7 +401,7 @@
       grid.classList.remove('hidden');
     }
 
-    // Render Web Vitals metrics into visual cards
+    // render web vitals metrics into visual cards
     function renderVitals(audits) {
       const vitalsGrid = document.getElementById('vitalsGrid');
       vitalsGrid.innerHTML = '';
@@ -297,37 +428,44 @@
       });
     }
 
-    // Helper to calculate request duration across schema versions
+    // helper to calculate request duration across schema versions
     function getResourceDuration(item) {
       if (typeof item.duration === 'number') {
         return Math.round(item.duration);
       }
       const start = item.startTime ?? item.networkRequestTime ?? item.rendererStartTime;
       const end = item.endTime ?? item.finishedTime ?? item.networkEndTime;
-      
+
       if (typeof start === 'number' && typeof end === 'number') {
         return Math.max(0, Math.round(end - start));
       }
       return 0;
     }
 
-    // Populate network resource table
+    // escape a string for safe use inside an html attribute
+    function escapeAttr(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // populate network resource table plus stats, charts and filter controls
     function renderResources(networkAudit) {
       const tbody = document.getElementById('resourceTable');
       tbody.innerHTML = '';
 
       if (!networkAudit || !networkAudit.details || !networkAudit.details.items) {
-        tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-slate-500">Keine detaillierten Netzwerkdaten verfügbar</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-slate-500">No detailed network data available</td></tr>';
+        document.getElementById('statsPanel').innerHTML = '';
+        document.getElementById('resultCount').textContent = '';
         return;
       }
 
       const items = networkAudit.details.items;
-      items.sort((a, b) => getResourceDuration(b) - getResourceDuration(a));
 
       items.forEach(item => {
         const row = document.createElement('tr');
-        
-        let fileName = 'Unbekannt';
+        row.className = 'res-row';
+
+        let fileName = 'Unknown';
         let parentPath = '';
         try {
           const parsed = new URL(item.url);
@@ -338,37 +476,231 @@
           fileName = item.url;
         }
 
-        const sizeKb = item.transferSize ? (item.transferSize / 1024).toFixed(1) : '0.0';
+        const type = normalizeType(item.resourceType);
+        const bytes = item.transferSize || 0;
         const durationMs = getResourceDuration(item);
+        const safeUrl = escapeAttr(item.url);
 
+        // hidden spans (.res-url / .k-size / .k-dur) act as stable keys for
+        // domina's filterElements / sortElements, which read element values.
         row.innerHTML = `
-          <td class="py-3 max-w-md truncate" title="${item.url}">
-            <div class="text-[10px] text-slate-500 font-mono truncate">${parentPath}</div>
-            <div class="font-mono text-xs text-indigo-300 font-medium truncate">${fileName}</div>
+          <td class="py-3 max-w-md truncate" title="${safeUrl}">
+            <span class="res-url" hidden>${escapeAttr(item.url.toLowerCase())}</span>
+            <div class="text-[10px] text-slate-500 font-mono truncate">${escapeAttr(parentPath)}</div>
+            <div class="col-name font-mono text-xs text-indigo-300 font-medium truncate">${escapeAttr(fileName)}</div>
           </td>
-          <td class="py-3 text-slate-400 text-xs">${item.resourceType || 'Sonstige'}</td>
-          <td class="py-3 text-slate-300">${sizeKb} KB</td>
-          <td class="py-3 text-slate-300 font-semibold">${durationMs} ms</td>
+          <td class="col-type py-3 text-slate-400 text-xs">${type}</td>
+          <td class="py-3 text-slate-300"><span class="k-size" hidden>${bytes}</span>${formatBytes(bytes)}</td>
+          <td class="py-3 text-slate-300 font-semibold"><span class="k-dur" hidden>${durationMs}</span>${durationMs} ms</td>
+          <td class="py-3 text-right">
+            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:text-indigo-300 text-xs whitespace-nowrap" title="Open resource in a new tab">open ↗</a>
+          </td>
         `;
         tbody.appendChild(row);
       });
+
+      renderStatsPanel(items);
+      populateTypeFilter(items);
+      renderCharts(items);
+
+      // reset controls, then apply current sort/filter to the fresh rows
+      document.getElementById('resourceSearch').value = '';
+      document.getElementById('typeFilter').value = '';
+      applyResourceSort();
     }
 
-    // Save active test report locally
+    // build the clickable stats panel (total + per-type counts)
+    function renderStatsPanel(items) {
+      const panel = document.getElementById('statsPanel');
+      panel.innerHTML = '';
+
+      const totalBytes = items.reduce((sum, it) => sum + (it.transferSize || 0), 0);
+
+      const byType = {};
+      items.forEach(it => {
+        const t = normalizeType(it.resourceType);
+        byType[t] = byType[t] || { count: 0, bytes: 0 };
+        byType[t].count++;
+        byType[t].bytes += it.transferSize || 0;
+      });
+
+      // leading summary cards (total files + total weight) reset the filter on click
+      panel.appendChild(buildStatCard('Total files', String(items.length), formatBytes(totalBytes), '#a5b4fc', ''));
+
+      Object.keys(byType)
+        .sort((a, b) => byType[b].count - byType[a].count)
+        .forEach(type => {
+          const info = byType[type];
+          panel.appendChild(buildStatCard(type, String(info.count), formatBytes(info.bytes), TYPE_COLORS[type] || '#94a3b8', type));
+        });
+    }
+
+    // a single stat card; clicking sets the type filter (empty string clears it)
+    function buildStatCard(label, value, sub, color, filterType) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'text-left bg-slate-800 p-3 rounded-xl border border-slate-700 hover:border-indigo-500 transition';
+      card.style.borderLeft = `3px solid ${color}`;
+      card.innerHTML = `
+        <div class="text-2xl font-bold text-slate-100">${value}</div>
+        <div class="text-xs font-medium text-slate-400 truncate">${label}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">${sub}</div>
+      `;
+      card.addEventListener('click', () => {
+        document.getElementById('typeFilter').value = filterType;
+        applyResourceFilter();
+      });
+      return card;
+    }
+
+    // fill the type dropdown from the types actually present
+    function populateTypeFilter(items) {
+      const select = document.getElementById('typeFilter');
+      const types = [...new Set(items.map(it => normalizeType(it.resourceType)))].sort();
+      select.innerHTML = '<option value="">All types</option>';
+      types.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        select.appendChild(opt);
+      });
+    }
+
+    // apply the search + type filter via domina's filterElements
+    function applyResourceFilter() {
+      const search = document.getElementById('resourceSearch').value;
+      const type = document.getElementById('typeFilter').value;
+
+      const result = filterElements({
+        container: '#resourceTable',
+        item: '.res-row',
+        filters: [
+          ['.res-url', search, 'contains'],
+          ['.col-type', type, 'exact'],
+        ],
+        mismatchClass: 'hidden',
+      });
+
+      document.getElementById('resultCount').textContent =
+        `showing ${result.matched} of ${result.total} resources`;
+    }
+
+    // sort the table via domina's sortElements, then re-apply the active filter
+    function applyResourceSort() {
+      const selectorByKey = {
+        name: '.col-name',
+        type: '.col-type',
+        size: '.k-size',
+        dur: '.k-dur',
+      };
+      const modeByKey = { name: 'regular', type: 'regular', size: 'num', dur: 'num' };
+
+      const selector = selectorByKey[sortState.key];
+      const order = `${modeByKey[sortState.key]}-${sortState.dir}`;
+
+      sortElements({
+        container: '#resourceTable',
+        item: '.res-row',
+        indicators: [[selector, order]],
+      });
+
+      updateSortIndicators();
+      applyResourceFilter();
+    }
+
+    // reflect the current sort column/direction in the header arrows
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        const ind = th.querySelector('.sort-ind');
+        if (!ind) return;
+        if (th.dataset.sort === sortState.key) {
+          ind.textContent = sortState.dir === 'asc' ? '▲' : '▼';
+          ind.className = 'sort-ind text-indigo-400';
+        } else {
+          ind.textContent = '';
+          ind.className = 'sort-ind text-slate-600';
+        }
+      });
+    }
+
+    function resetResourceFilters() {
+      document.getElementById('resourceSearch').value = '';
+      document.getElementById('typeFilter').value = '';
+      applyResourceFilter();
+    }
+
+    // render the two chartist svg charts (size donut + request-count bars)
+    function renderCharts(items) {
+      const byType = {};
+      items.forEach(it => {
+        const t = normalizeType(it.resourceType);
+        byType[t] = byType[t] || { count: 0, bytes: 0 };
+        byType[t].count++;
+        byType[t].bytes += it.transferSize || 0;
+      });
+
+      const types = Object.keys(byType).sort((a, b) => byType[b].bytes - byType[a].bytes);
+
+      // custom legend that mirrors the donut colors
+      const legend = document.getElementById('donutLegend');
+      legend.innerHTML = '';
+      types.forEach(t => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-1.5';
+        chip.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${TYPE_COLORS[t] || '#94a3b8'}"></span>${t}`;
+        legend.appendChild(chip);
+      });
+
+      if (typeof Chartist === 'undefined') return;
+
+      // donut: transfer-size share per type
+      Chartist.Pie('#sizeDonut', {
+        series: types.map(t => ({ value: byType[t].bytes, className: typeSlug(t) })),
+      }, {
+        donut: true,
+        donutWidth: 26,
+        showLabel: false,
+        chartPadding: 4,
+      });
+
+      // bars: request count per type
+      Chartist.Bar('#countBar', {
+        labels: types,
+        series: [types.map(t => byType[t].count)],
+      }, {
+        axisY: { onlyInteger: true },
+        chartPadding: { top: 8, right: 8, bottom: 8, left: 8 },
+      });
+    }
+
+    // download the active report as a json file
+    function exportCurrentReport() {
+      if (!activeReportData) return;
+      const blob = new Blob([JSON.stringify(activeReportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const host = (() => { try { return new URL(activeReportData.url).hostname; } catch (e) { return 'report'; } })();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `psi-${host}-${activeReportData.strategy}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // save active test report locally
     function saveCurrentTest() {
       if (!activeReportData) return;
       let saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
-      
-      // Avoid duplicate saves of identical report ID
+
+      // avoid duplicate saves of identical report id
       saved = saved.filter(item => item.id !== activeReportData.id);
       saved.unshift(activeReportData);
 
       localStorage.setItem(SAVED_REPORTS_STORAGE, JSON.stringify(saved));
       renderSavedReportsList();
-      alert('Test erfolgreich gespeichert!');
+      alert('Report saved successfully!');
     }
 
-    // Render interactive list of saved reports
+    // render interactive list of saved reports
     function renderSavedReportsList() {
       const saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
       const container = document.getElementById('savedReportsSection');
@@ -384,8 +716,8 @@
         const badge = document.createElement('div');
         badge.className = 'flex items-center gap-2 bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-700';
         badge.innerHTML = `
-          <button onclick="loadSavedReport('${report.id}')" class="text-indigo-300 hover:text-indigo-200 font-medium truncate max-w-[200px]" title="${report.url}">
-            ${report.url.replace(/^https?:\/\//, '')} (${report.strategy})
+          <button onclick="loadSavedReport('${report.id}')" class="text-indigo-300 hover:text-indigo-200 font-medium truncate max-w-[200px]" title="${escapeAttr(report.url)}">
+            ${escapeAttr(report.url.replace(/^https?:\/\//, ''))} (${report.strategy})
           </button>
           <button onclick="deleteSavedReport('${report.id}')" class="text-slate-500 hover:text-red-400 font-bold ml-1">
             ✕
@@ -397,7 +729,7 @@
       container.classList.remove('hidden');
     }
 
-    // Load saved report into UI
+    // load saved report into ui
     function loadSavedReport(id) {
       const saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
       const report = saved.find(item => item.id === id);
@@ -407,13 +739,23 @@
       }
     }
 
-    // Delete saved report entry
+    // delete saved report entry
     function deleteSavedReport(id) {
       let saved = JSON.parse(localStorage.getItem(SAVED_REPORTS_STORAGE) || '[]');
       saved = saved.filter(item => item.id !== id);
       localStorage.setItem(SAVED_REPORTS_STORAGE, JSON.stringify(saved));
       renderSavedReportsList();
     }
+
+    // expose handlers used by inline onclick attributes (module scope is not global)
+    Object.assign(window, {
+      analyzeUrl,
+      saveCurrentTest,
+      exportCurrentReport,
+      loadSavedReport,
+      deleteSavedReport,
+      resetResourceFilters,
+    });
   </script>
 </body>
 </html>
