@@ -133,6 +133,15 @@
         </div>
       </div>
 
+      <!-- hierarchical import-path tree: click a path prefix to filter the table below -->
+      <div id="importPathsPanel" class="hidden bg-slate-800 rounded-xl p-6 border border-slate-700">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-slate-300">Import paths</h3>
+          <span class="text-xs text-slate-500">click a path to filter</span>
+        </div>
+        <div id="importPathsTree" class="space-y-0.5 text-xs font-mono max-h-72 overflow-y-auto"></div>
+      </div>
+
       <!-- resource timings -->
       <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -162,7 +171,6 @@
                 <th class="pb-2" data-sort="type">Type <span class="sort-ind text-slate-600"></span></th>
                 <th class="pb-2" data-sort="size">Size <span class="sort-ind text-slate-600"></span></th>
                 <th class="pb-2" data-sort="dur">Duration <span class="sort-ind text-slate-600"></span></th>
-                <th class="pb-2 text-right">Open</th>
               </tr>
             </thead>
             <tbody id="resourceTable" class="divide-y divide-slate-700/50"></tbody>
@@ -453,9 +461,11 @@
       tbody.innerHTML = '';
 
       if (!networkAudit || !networkAudit.details || !networkAudit.details.items) {
-        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-slate-500">No detailed network data available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-slate-500">No detailed network data available</td></tr>';
         document.getElementById('statsPanel').innerHTML = '';
         document.getElementById('resultCount').textContent = '';
+        document.getElementById('importPathsTree').innerHTML = '';
+        document.getElementById('importPathsPanel').classList.add('hidden');
         return;
       }
 
@@ -487,19 +497,17 @@
           <td class="py-3 max-w-md truncate" title="${safeUrl}">
             <span class="res-url" hidden>${escapeAttr(item.url.toLowerCase())}</span>
             <div class="text-[10px] text-slate-500 font-mono truncate">${escapeAttr(parentPath)}</div>
-            <div class="col-name font-mono text-xs text-indigo-300 font-medium truncate">${escapeAttr(fileName)}</div>
+            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="col-name block font-mono text-xs text-indigo-300 hover:text-indigo-200 hover:underline font-medium truncate" title="Open ${safeUrl} in a new tab">${escapeAttr(fileName)} ↗</a>
           </td>
           <td class="col-type py-3 text-slate-400 text-xs">${type}</td>
           <td class="py-3 text-slate-300"><span class="k-size" hidden>${bytes}</span>${formatBytes(bytes)}</td>
           <td class="py-3 text-slate-300 font-semibold"><span class="k-dur" hidden>${durationMs}</span>${durationMs} ms</td>
-          <td class="py-3 text-right">
-            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:text-indigo-300 text-xs whitespace-nowrap" title="Open resource in a new tab">open ↗</a>
-          </td>
         `;
         tbody.appendChild(row);
       });
 
       renderStatsPanel(items);
+      renderImportPaths(items);
       populateTypeFilter(items);
       renderCharts(items);
 
@@ -551,6 +559,75 @@
         applyResourceFilter();
       });
       return card;
+    }
+
+    // count files sitting under every directory prefix of the imported resources.
+    // a file contributes to its origin root and to each ancestor directory, so the
+    // returned counts are cumulative (descendant files) per prefix.
+    function buildPathCounts(items) {
+      const counts = new Map();
+      items.forEach(it => {
+        let origin, segments;
+        try {
+          const u = new URL(it.url);
+          origin = u.origin;
+          segments = u.pathname.split('/').filter(Boolean);
+        } catch (e) {
+          return;
+        }
+        // drop the last segment (the file itself) to get directory segments only
+        const dirSegments = segments.slice(0, -1);
+        let prefix = origin + '/';
+        counts.set(prefix, (counts.get(prefix) || 0) + 1);
+        dirSegments.forEach(seg => {
+          prefix += seg + '/';
+          counts.set(prefix, (counts.get(prefix) || 0) + 1);
+        });
+      });
+      return counts;
+    }
+
+    // directory depth of a prefix, used for indentation (origin root = 0)
+    function prefixDepth(prefix) {
+      const parts = prefix.replace(/^https?:\/\//, '').split('/').filter(Boolean);
+      return Math.max(0, parts.length - 1);
+    }
+
+    // render the hierarchical import-path tree; clicking a row filters the table
+    // by that prefix via the existing search input (contains-match on the url)
+    function renderImportPaths(items) {
+      const tree = document.getElementById('importPathsTree');
+      const panel = document.getElementById('importPathsPanel');
+      tree.innerHTML = '';
+
+      const counts = buildPathCounts(items);
+      const prefixes = [...counts.keys()].sort();
+
+      if (prefixes.length === 0) {
+        panel.classList.add('hidden');
+        return;
+      }
+
+      prefixes.forEach(prefix => {
+        const depth = prefixDepth(prefix);
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'w-full flex items-center justify-between gap-3 text-left px-2 py-1 rounded hover:bg-slate-700/50 text-slate-300 transition';
+        row.style.paddingLeft = (8 + depth * 16) + 'px';
+        row.title = prefix;
+        row.innerHTML = `
+          <span class="truncate">${escapeAttr(prefix)}</span>
+          <span class="shrink-0 text-slate-500 bg-slate-900/60 px-1.5 rounded">${counts.get(prefix)}</span>
+        `;
+        row.addEventListener('click', () => {
+          document.getElementById('resourceSearch').value = prefix.toLowerCase();
+          document.getElementById('typeFilter').value = '';
+          applyResourceFilter();
+        });
+        tree.appendChild(row);
+      });
+
+      panel.classList.remove('hidden');
     }
 
     // fill the type dropdown from the types actually present
